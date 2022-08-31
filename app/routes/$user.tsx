@@ -4,7 +4,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 
 import { getMDXComponent } from 'mdx-bundler/client'
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { bundleMDXFromSource } from "~/mdx.server";
 
 const repo = "example-mdx";
@@ -34,10 +34,7 @@ async function fetchGraphQL(query: string, variables: object) {
       Authorization: `bearer ${process.env.GITHUB_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
+    body: JSON.stringify({ query, variables, }),
   }
   const response = await fetch('https://api.github.com/graphql', options)
   return await response.json()
@@ -61,7 +58,7 @@ type Response = {
 type LoaderData = {
   user: Response["data"]["user"],
   mdx: null | Awaited<ReturnType<typeof bundleMDXFromSource>>;
-  error: string
+  error: null | string
 }
 
 export const loader: LoaderFunction = async ({ params }) => {
@@ -74,7 +71,8 @@ export const loader: LoaderFunction = async ({ params }) => {
     try {
       mdx = await bundleMDXFromSource(repository.object.text)
     } catch (e) {
-      error = e.message;
+      const err = e as Error
+      error = err.message
     }
   }
   return json<LoaderData>({ user, mdx, error })
@@ -88,21 +86,14 @@ function noRepo() {
     </div>
   )
 }
-
-export const Counter = () => {
-  const [count, setCount] = useState(0);
-  return (
-    <div>
-      <h1>{count}</h1>
-      <button onClick={() => setCount(count + 1)}>+</button>
-    </div>
-  )
-}
-
 export default function User() {
-  const { user, mdx } = useLoaderData<LoaderData>();
-  console.log(mdx.code.s)
+  const { user, mdx, error } = useLoaderData<LoaderData>();
   const Component = useMemo(() => mdx ? getMDXComponent(mdx.code) : noRepo, [mdx])
+
+  if (!user) {
+    return <div>Invalid user</div>
+  }
+  const href = `https://github.com/${user.login}/${repo}`;
 
   return (
     <div>
@@ -110,9 +101,9 @@ export default function User() {
       <h2>{user.login}</h2>
       <img src={user.avatarUrl} />
       <main>
-        <Component />
+        {error ? <div>{error}</div> : <Component />}
       </main>
-      <div>Utilizando el repo {`https://github.com/${user.login}/${repo}`}</div>
+      <a href={href}>Utilizando el repo {href}</a>
     </div>
   )
 }
